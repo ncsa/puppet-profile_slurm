@@ -126,8 +126,14 @@ done
 ## Backfill & Scheduler Stats
 "${slurm_path}"/sdiag > $tf
 
-IFS=" " read slurm_server_thread_count slurm_rpc_queue_enabled slurm_agent_queue_size slurm_agent_count slurm_agent_thread_count slurm_dbd_agent_queue_size slurm_jobs_submitted slurm_jobs_started slurm_jobs_completed slurm_jobs_canceled slurm_jobs_failed <<< "$(cat $tf | grep -A 12 "Data since" | tail -n +3 | cut -d':' -f 2 | sed -e 's/^[[:space:]]*//' | xargs)"
+slurm_version=$("${slurm_path}"/sdiag -V | awk '{print $2}' | sed 's/\.//g')
 
+if [ ${slurm_version} -ge 24000 ]; then
+	IFS=" " read slurm_server_thread_count slurm_rpc_queue_enabled slurm_agent_queue_size slurm_agent_count slurm_agent_thread_count slurm_dbd_agent_queue_size slurm_jobs_submitted slurm_jobs_started slurm_jobs_completed slurm_jobs_canceled slurm_jobs_failed <<< "$(cat $tf | grep -A 12 "Data since" | tail -n +3 | cut -d':' -f 2 | sed -e 's/^[[:space:]]*//' | xargs)"
+else
+        IFS=" " read slurm_server_thread_count slurm_agent_queue_size slurm_agent_count slurm_agent_thread_count slurm_dbd_agent_queue_size slurm_jobs_submitted slurm_jobs_started slurm_jobs_completed slurm_jobs_canceled slurm_jobs_failed <<< "$(cat $tf | grep -A 12 "Data since" | tail -n +3 | cut -d':' -f 2 | sed -e 's/^[[:space:]]*//' | xargs)"
+	slurm_rpc_queue_enabled=0
+fi
 if [ -z "$(cat ${tf} | grep -A 7 "Main schedule statistics" | grep -i minute)" ]; then
 	IFS=" " read slurm_last_cycle_time slurm_max_cycle_time slurm_total_cycles slurm_mean_cycle slurm_mean_depth_cycle slurm_last_queue_length <<< "$(cat ${tf} | grep -A 7 "Main schedule statistics" | tail -n +2 | cut -d':' -f 2 | sed -e 's/^[[:space:]]*//' | xargs)"
 	slurm_cycles_per_minute=1

@@ -13,11 +13,14 @@ else
   mysqlpass="-p${password}"
 fi
 
+## Clean up prior temp
+rm -f /tmp/slurm_tig.*
+
 ## Setup temp files and define path to slurm
-tfile=$(mktemp /tmp/slurm_node.XXXXXX)
-tfile2=$(mktemp /tmp/squeue.XXXXXX)
-tfile3=$(mktemp /tmp/nodeinfo.XXXXXX)
-tfile4=$(mktemp /tmp/pending.XXXXXX)
+tfile=$(mktemp /tmp/slurm_tig.XXXXXX)
+tfile2=$(mktemp /tmp/slurm_tig.XXXXXX)
+tfile3=$(mktemp /tmp/slurm_tig.XXXXXX)
+tfile4=$(mktemp /tmp/slurm_tig..XXXXXX)
 
 ##Dump info about all running jobs into a temp file; get the list of all nodes in the system
 "${slurm_path}"/squeue -t running -O Partition:75,NodeList:250,tres-alloc:70,username | grep -v TRES_ALLOC | awk '{print $1","$2","$3","$4}' > "${tfile2}"

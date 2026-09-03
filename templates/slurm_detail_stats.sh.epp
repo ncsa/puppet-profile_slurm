@@ -14,13 +14,13 @@ else
 fi
 
 ## Clean up prior temp
-rm -f /tmp/slurm_tig.*
+rm -f /tmp/tig_slurm.*
 
 ## Setup temp files and define path to slurm
-tfile=$(mktemp /tmp/slurm_tig.XXXXXX)
-tfile2=$(mktemp /tmp/slurm_tig.XXXXXX)
-tfile3=$(mktemp /tmp/slurm_tig.XXXXXX)
-tfile4=$(mktemp /tmp/slurm_tig..XXXXXX)
+tfile=$(mktemp /tmp/tig_slurm.XXXXXX)
+tfile2=$(mktemp /tmp/tig_slurm.XXXXXX)
+tfile3=$(mktemp /tmp/tig_slurm.XXXXXX)
+tfile4=$(mktemp /tmp/tig_slurm.XXXXXX)
 
 ##Dump info about all running jobs into a temp file; get the list of all nodes in the system
 "${slurm_path}"/squeue -t running -O Partition:75,NodeList:250,tres-alloc:70,username | grep -v TRES_ALLOC | awk '{print $1","$2","$3","$4}' > "${tfile2}"
@@ -320,7 +320,4 @@ while read -r p; do
         fi
 done < "${tfile}"
 
-rm -rf "${tfile}"
-rm -rf "${tfile2}"
-rm -rf "${tfile3}"
-rm -rf "${tfile4}"
+rm -f /tmp/tig_slurm.*

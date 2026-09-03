@@ -3,7 +3,10 @@
 #!/bin/bash
 # This file is managed by Puppet
 
-tfile=$(mktemp /tmp/seff.XXXXXX)
+## Pre Cleanup
+rm -f /tmp/tig_seff.*
+
+tfile=$(mktemp /tmp/tig_seff.XXXXXX)
 source <%= $source_path %>
 
 if [ -z "$password" ]
@@ -56,4 +59,5 @@ do
 	fi
 done
 
-rm -rf ${tfile}
+## Cleanup
+rm -f /tmp/tig_seff.*

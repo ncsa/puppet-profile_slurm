@@ -43,88 +43,52 @@ echo "slurm_jobsumdata,partition=all,type=percent_of_max_jobs count=${percent_ma
 pend_line="slurm_jobsumdata,partition=all,type=pendingbyreason "
 found_pending=0
 while IFS= read -r line; do
-	found_pending=1
-	IFS=" " read -r pend_job_count pend_reason <<< "${line}"
-	pend_line="${pend_line},${pend_reason}=${pend_job_count}"
+  found_pending=1
+  IFS=" " read -r pend_job_count pend_reason <<< "${line}"
+  pend_line="${pend_line},${pend_reason}=${pend_job_count}"
 done < <(awk '{print $9}' ${tfile1} | awk '$1 ~ /\(/ {print $0}' | sort | uniq -c | sed 's/^ *//g' | tr -d '()' | sed 's/,//g')
 if [ ${found_pending} -eq 1 ]; then
-	final_pend_line=$(echo ${pend_line} | sed 's/\ ,/\ /')
-	echo "${final_pend_line}"
+  final_pend_line=$(echo ${pend_line} | sed 's/\ ,/\ /')
+  echo "${final_pend_line}"
 fi
 
 for p in ${partitions[@]}
 do
-	total_jobs=$(awk -v p="$p" '$1==p {print $0}' ${tfile2} | wc -l)
-	running_jobs=$(awk -v p="$p" '$1==p {print $0}' ${tfile2} | awk '$3 == "RUNNING" {print $0}' | wc -l )
-	pending_jobs=$(awk -v p="$p" '$1==p {print $0}' ${tfile2} | awk '$3 == "PENDING" {print $0}' | wc -l )
+  read -r total_jobs running_jobs pending_jobs < <(awk -v p="$p" ' $1 == p {total++; if ($3 == "RUNNING") running++; else if ($3 == "PENDING") pending++; } END { print total+0, running+0, pending+0 }' ${tfile2})
 
-	echo "slurm_jobsumdata,partition=$p,type=running count=${running_jobs}"
-	echo "slurm_jobsumdata,partition=$p,type=pending count=${pending_jobs}"
-	echo "slurm_jobsumdata,partition=$p,type=total count=${total_jobs}"
+  echo "slurm_jobsumdata,partition=$p,type=running count=${running_jobs}"
+  echo "slurm_jobsumdata,partition=$p,type=pending count=${pending_jobs}"
+  echo "slurm_jobsumdata,partition=$p,type=total count=${total_jobs}"
 
-	pend_line="slurm_jobsumdata,partition=${p},type=pendingbyreason "
-	found_pending=0
-	while IFS= read -r line; do
-		found_pending=1
-		IFS=" " read -r pend_job_count pend_reason <<< "${line}"
-		pend_line="${pend_line},${pend_reason}=${pend_job_count}"
-	done < <(awk -v partition=${p} '$2 == partition {print $9}' ${tfile1} | awk '$1 ~ /\(/ {print $0}' | sort | uniq -c | sed 's/^ *//g' | tr -d '()' | sed 's/,//g')
-	if [ ${found_pending} -eq 1 ]; then
-		final_pend_line=$(echo ${pend_line} | sed 's/\ ,/\ /')
-		echo "${final_pend_line}"
-	fi
+  awk -v partition="$p" '$2==partition && $9~/\(/ { reason=$9; gsub(/[(),]/,"",reason); count[reason]++ } END { if(length(count)){ printf "slurm_jobsumdata,partition=%s,type=pendingbyreason",partition; for(reason in count) printf ",%s=%d",reason,count[reason]; printf "\n" } }' "$tfile1"
 
-        state_string=""
-        states=($(grep ^${p}, ${tfile3} | cut -d',' -f 3 | sort | uniq))
-        for s in ${states[@]}
-        do
-                count=$(grep ^${p}, ${tfile3} | grep ,${s}$ | cut -d',' -f 2 | paste -sd+ | bc)
-                state_string="${state_string},${s}=${count}"
-        done
-        final_state=$(echo ${state_string} | cut -c 2-)
-        if [ "${final_state}" != "n/a=0" ]; then
-                echo "slurm_partition_node_state,partition=${p} ${final_state}"
-        else
-                echo "slurm_partition_node_state,partition=${p} idle=0"
-        fi
+  awk -F',' -v partition="$p" '$1==partition { count[$3]+=$2 } END { if(length(count)){ printf "slurm_partition_node_state,partition=%s ",partition; first=1; for(state in count){ if(!first) printf ","; printf "%s=%d",state,count[state]; first=0 } printf "\n" } else printf "slurm_partition_node_state,partition=%s idle=0\n",partition }' "$tfile3"
 
-	IFS="/" read alloc_nodes idle_nodes offline_nodes total_nodes <<< "$("${slurm_path}"/sinfo -h --partition="$p" -o %F)"
-	
-	if [ -z "${alloc_nodes}" ]; then
-		percent_offline=0
-		offline_nodes=0
-		alloc_nodes=0
-		idle_nodes=0
-		total_nodes=0
+  IFS="/" read -r alloc_nodes idle_nodes offline_nodes total_nodes <<< "$("${slurm_path}"/sinfo -h --partition="$p" -o %F)"
 
-		echo "slurm_nodedata,partition=$p,type=offline count=${offline_nodes}"
-                echo "slurm_nodedata,partition=$p,type=busy count=${alloc_nodes}"
-                echo "slurm_nodedata,partition=$p,type=idle count=${idle_nodes}"
-                echo "slurm_nodedata,partition=$p,type=total count=${total_nodes}"
-                echo "slurm_nodedata,partition=$p,type=percent_offline percent=${percent_offline}"
-	else
-		percent_offline=$(echo "${offline_nodes} / ${total_nodes} * 100" | bc -l)
+  if [ -z "${alloc_nodes}" ]; then
+    percent_offline=0
+    offline_nodes=0
+    alloc_nodes=0
+    idle_nodes=0
+    total_nodes=0
 
-		echo "slurm_nodedata,partition=$p,type=offline count=${offline_nodes}"
-	        echo "slurm_nodedata,partition=$p,type=busy count=${alloc_nodes}"
-		echo "slurm_nodedata,partition=$p,type=idle count=${idle_nodes}"
-		echo "slurm_nodedata,partition=$p,type=total count=${total_nodes}"
-		echo "slurm_nodedata,partition=$p,type=percent_offline percent=${percent_offline}"
-	fi
-	if [ ${total_jobs} -ne 0 ]; then
-		users=($(cat ${tfile2} | awk '{print $2}' | sort -u))
-		for u in ${users[@]}
-		do
-			count_running=$(awk -v u="$u" '$2==u {print $0}' ${tfile2} | awk -v p="$p" '$1==p {print $0}' | awk '$3 == "RUNNING"' |  wc -l)
-			count_pending=$(awk -v u="$u" '$2==u {print $0}' ${tfile2} | awk -v p="$p" '$1==p {print $0}' | awk '$3 == "PENDING"' | wc -l)
-			if [ $count_running -ne 0 ]; then
-				echo "slurm_userjobdata,partition=$p,type=running,uname=$u count=$count_running"
-			fi
-			if [ $count_pending -ne 0 ]; then
-	                        echo "slurm_userjobdata,partition=$p,type=pending,uname=$u count=$count_pending"
-	                fi
-		done
-	fi
+  else
+    percent_offline=$(echo "${offline_nodes} / ${total_nodes} * 100" | bc -l)
+  fi
+  echo "slurm_nodedata,partition=$p,type=offline count=${offline_nodes}"
+  echo "slurm_nodedata,partition=$p,type=busy count=${alloc_nodes}"
+  echo "slurm_nodedata,partition=$p,type=idle count=${idle_nodes}"
+  echo "slurm_nodedata,partition=$p,type=total count=${total_nodes}"
+  echo "slurm_nodedata,partition=$p,type=percent_offline percent=${percent_offline}"
+
+  if [ ${total_jobs} -ne 0 ]; then
+    users=($(awk '{print $2}' ${tfile2} | sort -u))
+    for u in ${users[@]}
+    do
+            awk -v p="$p" -v u="$u" '$1 == p && $2 == u && ($3 == "RUNNING" || $3 == "PENDING") { count[$2,$3]++ } END { for (key in count) { split(key, a, SUBSEP); printf "slurm_userjobdata,partition=%s,type=%s,uname=%s count=%d\n", p, tolower(a[2]), a[1], count[key] } }' "${tfile2}"
+    done
+  fi
 done
 
 ## Backfill & Scheduler Stats

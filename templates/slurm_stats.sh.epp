@@ -60,7 +60,8 @@ do
   echo "slurm_jobsumdata,partition=$p,type=pending count=${pending_jobs}"
   echo "slurm_jobsumdata,partition=$p,type=total count=${total_jobs}"
 
-  awk -v partition="$p" '$2==partition && $9~/\(/ { reason=$9; gsub(/[(),]/,"",reason); count[reason]++ } END { if(length(count)){ printf "slurm_jobsumdata,partition=%s,type=pendingbyreason",partition; for(reason in count) printf " %s=%d",reason,count[reason]; printf "\n" } }' "$tfile1"
+  awk -v partition="$p" '$2==partition && $9~/\(/ { reason=$9; gsub(/[(),]/,"",reason); count[reason]++ } END { if(length(count)) { printf "slurm_jobsumdata,partition=%s,type=pendingbyreason ",partition; sep=""; for(reason in count) { printf "%s%s=%d",sep
+,reason,count[reason]; sep="," } printf "\n" } }' "$tfile1"
 
   awk -F',' -v partition="$p" '$1==partition { count[$3]+=$2 } END { if(length(count)){ printf "slurm_partition_node_state,partition=%s ",partition; first=1; for(state in count){ if(!first) printf ","; printf "%s=%d",state,count[state]; first=0 } printf "\n" } else printf "slurm_partition_node_state,partition=%s idle=0\n",partition }' "$tfile3"
 
